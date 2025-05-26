@@ -45,14 +45,16 @@ Example database structure:
 ### 4. Share Database with Integration
 
 1. Open your Notion database
-2. Click the "..." menu in top right
-3. Click "Add connections"
+2. Click the "..." menu in very top right
+3. Click "Connections"
 4. Select your integration
 
 ### 5. Get Database ID
-
-From your database URL: `https://notion.so/your-workspace/DATABASE_ID?v=...`
-Copy the `DATABASE_ID` part (32 character string)
+1. Open your Notion database
+2. Click the "..." menu in very top right
+3. Click "Copy link"
+4. From your database URL: `https://notion.so/your-workspace/DATABASE_ID?v=...`
+5. Copy the `DATABASE_ID` part (32 character string)
 
 ### 6. Configure Environment
 
