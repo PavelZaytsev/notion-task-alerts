@@ -48,8 +48,12 @@ class Task:
     end_time: Optional[datetime]
     description: str
     notion_url: str
+    prepare_minutes: Optional[int] = None  # Minutes before start to send preparation alert
+    soft_stop_minutes: Optional[int] = None  # Minutes before end to send soft stop alert
+    prepare_notified: bool = False
+    start_notified: bool = False
     soft_stop_notified: bool = False
-    hard_stop_notified: bool = False
+    end_notified: bool = False
 
 class NotionTaskSync:
     def __init__(self):
@@ -106,6 +110,8 @@ class NotionTaskSync:
                 logger.info(f"  - ID: {task.id}")
                 logger.info(f"  - Start Time: {task.start_time}")
                 logger.info(f"  - End Time: {task.end_time}")
+                logger.info(f"  - Prepare Minutes: {task.prepare_minutes}")
+                logger.info(f"  - Soft Stop Minutes: {task.soft_stop_minutes}")
                 logger.info(f"  - Description: {task.description[:100]}{'...' if len(task.description) > 100 else ''}")
                 logger.info(f"  - Notion URL: {task.notion_url}")
                 logger.info("  ---")
@@ -188,6 +194,36 @@ class NotionTaskSync:
             if desc_prop and desc_prop['type'] == 'rich_text' and desc_prop['rich_text']:
                 description = ''.join([text['plain_text'] for text in desc_prop['rich_text']])
             
+            # Extract Prepare Mins property
+            prepare_minutes = None
+            prepare_prop = properties.get('Prepare Mins')
+            
+            logger.info(f"Looking for 'Prepare Mins' property...")
+            if prepare_prop:
+                logger.info(f"Found 'Prepare Mins' property: {prepare_prop}")
+                if prepare_prop['type'] == 'number' and prepare_prop.get('number') is not None:
+                    prepare_minutes = int(prepare_prop['number'])
+                    logger.info(f"✅ Extracted Prepare Mins: {prepare_minutes} minutes")
+                else:
+                    logger.info("Prepare Mins property exists but value is None/empty")
+            else:
+                logger.info("No 'Prepare Mins' property found")
+            
+            # Extract Soft Stop Mins property
+            soft_stop_minutes = None
+            soft_stop_prop = properties.get('Soft Stop Mins')
+            
+            logger.info(f"Looking for 'Soft Stop Mins' property...")
+            if soft_stop_prop:
+                logger.info(f"Found 'Soft Stop Mins' property: {soft_stop_prop}")
+                if soft_stop_prop['type'] == 'number' and soft_stop_prop.get('number') is not None:
+                    soft_stop_minutes = int(soft_stop_prop['number'])
+                    logger.info(f"✅ Extracted Soft Stop Mins: {soft_stop_minutes} minutes")
+                else:
+                    logger.info("Soft Stop Mins property exists but value is None/empty")
+            else:
+                logger.info("No 'Soft Stop Mins' property found")
+            
             # Create Notion URL
             notion_url = f"https://notion.so/{page['id'].replace('-', '')}"
             
@@ -197,7 +233,9 @@ class NotionTaskSync:
                 start_time=start_time,
                 end_time=end_time,
                 description=description,
-                notion_url=notion_url
+                notion_url=notion_url,
+                prepare_minutes=prepare_minutes,
+                soft_stop_minutes=soft_stop_minutes
             )
             
         except Exception as e:
@@ -230,50 +268,51 @@ class NotionTaskSync:
         now = get_current_time()
         
         for task in self.active_tasks.values():
-            # Handle tasks with start time only (no end time)
-            if task.start_time and not task.end_time:
-                # Check for start notification
-                if (not task.soft_stop_notified and 
-                    now >= task.start_time):
-                    
+            # 1. PREPARE ALERT: Notify before start time if Prepare Mins is specified
+            if (task.start_time and task.prepare_minutes is not None and 
+                not task.prepare_notified):
+                prepare_time = task.start_time - timedelta(minutes=task.prepare_minutes)
+                if now >= prepare_time:
                     self.send_notification(
-                        "Start Now",
-                        f"Time to begin: {task.title}\nStarted at {task.start_time.strftime('%H:%M')}",
+                        f"Prepare - {task.prepare_minutes} min warning",
+                        f"🧠 Start getting ready to shift gears\n{task.title}\nStarts at {task.start_time.strftime('%H:%M')}",
                         task,
-                        "start_now"
+                        "prepare_alert"
                     )
-                    task.soft_stop_notified = True  # Reuse this flag to avoid repeat notifications
-                continue
+                    task.prepare_notified = True
             
-            # Handle tasks with both start and end times
-            if not task.end_time:
-                continue
-                
-            # Check for soft stop (15 minutes before end)
-            soft_stop_time = task.end_time - timedelta(minutes=15)
-            if (not task.soft_stop_notified and 
-                now >= soft_stop_time and 
-                now < task.end_time):
-                
+            # 2. START ALERT: Notify at start time
+            if (task.start_time and not task.start_notified and now >= task.start_time):
                 self.send_notification(
-                    "Soft Stop - 15 min warning",
-                    f"Start wrapping up: {task.title}\nEnds at {task.end_time.strftime('%H:%M')}",
+                    "Start Now",
+                    f"🎯 Lock in and begin the task\n{task.title}",
                     task,
-                    "soft_stop"
+                    "start_alert"
                 )
-                task.soft_stop_notified = True
+                task.start_notified = True
             
-            # Check for hard stop (at end time)
-            if (not task.hard_stop_notified and 
-                now >= task.end_time):
-                
+            # 3. SOFT STOP ALERT: Notify before end time if Soft Stop Mins is specified
+            if (task.end_time and task.soft_stop_minutes is not None and 
+                not task.soft_stop_notified):
+                soft_stop_time = task.end_time - timedelta(minutes=task.soft_stop_minutes)
+                if now >= soft_stop_time and now < task.end_time:
+                    self.send_notification(
+                        f"Soft Stop - {task.soft_stop_minutes} min warning",
+                        f"🔄 Start winding down your CPUs\n{task.title}\nEnds at {task.end_time.strftime('%H:%M')}",
+                        task,
+                        "soft_stop_alert"
+                    )
+                    task.soft_stop_notified = True
+            
+            # 4. END ALERT: Notify at end time
+            if (task.end_time and not task.end_notified and now >= task.end_time):
                 self.send_notification(
-                    "Hard Stop - Time's up!",
-                    f"Stop now: {task.title}\nTime to disengage and move on.",
+                    "Time's Up!",
+                    f"🛑 Disengage now\n{task.title}",
                     task,
-                    "hard_stop"
+                    "end_alert"
                 )
-                task.hard_stop_notified = True
+                task.end_notified = True
     
     def update_active_tasks(self):
         """Update the list of active tasks"""
@@ -284,8 +323,10 @@ class NotionTaskSync:
             if task.id in self.active_tasks:
                 # Preserve notification state
                 existing_task = self.active_tasks[task.id]
+                task.prepare_notified = existing_task.prepare_notified
+                task.start_notified = existing_task.start_notified
                 task.soft_stop_notified = existing_task.soft_stop_notified
-                task.hard_stop_notified = existing_task.hard_stop_notified
+                task.end_notified = existing_task.end_notified
             
             self.active_tasks[task.id] = task
         
