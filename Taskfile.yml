@@ -58,6 +58,8 @@ tasks:
     cmds:
       - docker stop {{.CONTAINER_NAME}} || true
       - docker rm {{.CONTAINER_NAME}} || true
+      - docker stop {{.CONTAINER_NAME}}-dev || true
+      - docker rm {{.CONTAINER_NAME}}-dev || true
       - echo "✅ Container stopped and removed"
 
   restart:
@@ -93,7 +95,7 @@ tasks:
 
   dev:
     desc: Run container with code mounted for development
-    deps: [build]
+    deps: [stop, build]
     cmds:
       - |
         if [ ! -f .env ]; then

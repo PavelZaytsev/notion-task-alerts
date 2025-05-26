@@ -1,4 +1,5 @@
 # Environment files (contains sensitive API tokens)
+.task
 .env
 .env.*
 !env.example

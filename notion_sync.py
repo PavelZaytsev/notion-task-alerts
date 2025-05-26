@@ -9,7 +9,7 @@ at the right times to help with ADHD task management.
 import os
 import time
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Optional
 from dataclasses import dataclass
 
@@ -27,6 +27,17 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+def ensure_timezone_aware(dt: datetime) -> datetime:
+    """Ensure datetime is timezone-aware, defaulting to local timezone if naive"""
+    if dt.tzinfo is None:
+        # If naive, assume local timezone
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
+
+def get_current_time() -> datetime:
+    """Get current time as timezone-aware datetime"""
+    return datetime.now(timezone.utc)
 
 @dataclass
 class Task:
@@ -54,10 +65,11 @@ class NotionTaskSync:
     def fetch_tasks(self) -> List[Task]:
         """Fetch tasks from Notion database"""
         try:
-            # Get today's date range
-            today = datetime.now().date()
-            start_of_day = datetime.combine(today, datetime.min.time())
-            end_of_day = datetime.combine(today, datetime.max.time())
+            # Get today's date range in UTC
+            now = get_current_time()
+            today = now.date()
+            start_of_day = datetime.combine(today, datetime.min.time(), timezone.utc)
+            end_of_day = datetime.combine(today, datetime.max.time(), timezone.utc)
             
             # Query Notion database for today's tasks
             response = self.notion.databases.query(
@@ -65,13 +77,13 @@ class NotionTaskSync:
                 filter={
                     "and": [
                         {
-                            "property": "Start Time",
+                            "property": "Due",
                             "date": {
                                 "on_or_after": start_of_day.isoformat()
                             }
                         },
                         {
-                            "property": "Start Time", 
+                            "property": "Due", 
                             "date": {
                                 "on_or_before": end_of_day.isoformat()
                             }
@@ -87,6 +99,17 @@ class NotionTaskSync:
                     tasks.append(task)
                     
             logger.info(f"Fetched {len(tasks)} tasks from Notion")
+            
+            # Debug: Show details of each task
+            for i, task in enumerate(tasks, 1):
+                logger.info(f"Task {i}: '{task.title}'")
+                logger.info(f"  - ID: {task.id}")
+                logger.info(f"  - Start Time: {task.start_time}")
+                logger.info(f"  - End Time: {task.end_time}")
+                logger.info(f"  - Description: {task.description[:100]}{'...' if len(task.description) > 100 else ''}")
+                logger.info(f"  - Notion URL: {task.notion_url}")
+                logger.info("  ---")
+            
             return tasks
             
         except Exception as e:
@@ -98,6 +121,23 @@ class NotionTaskSync:
         try:
             properties = page['properties']
             
+            # Debug: Show raw page properties for this task
+            title_prop = properties.get('Name') or properties.get('Title')
+            task_title = 'Unknown'
+            if title_prop and title_prop['type'] == 'title':
+                task_title = ''.join([text['plain_text'] for text in title_prop['title']])
+            
+            logger.info(f"=== PARSING TASK: {task_title} ===")
+            
+            # Debug: Show raw Due property data
+            due_prop = properties.get('Due') or properties.get('Date')
+            if due_prop:
+                logger.info(f"Raw Due property: {due_prop}")
+            else:
+                logger.info("No Due property found")
+                
+            logger.info("=== END TASK PARSING ===\n")
+            
             # Extract title
             title_prop = properties.get('Name') or properties.get('Title')
             if not title_prop:
@@ -108,16 +148,39 @@ class NotionTaskSync:
             else:
                 title = 'Untitled Task'
             
-            # Extract start time
+            # Extract start time and end time from Due property
             start_time = None
-            start_prop = properties.get('Start Time') or properties.get('Date')
-            if start_prop and start_prop['date']:
-                start_time = parser.parse(start_prop['date']['start'])
-            
-            # Extract end time
             end_time = None
-            if start_prop and start_prop['date'] and start_prop['date'].get('end'):
-                end_time = parser.parse(start_prop['date']['end'])
+            due_prop = properties.get('Due') or properties.get('Date')
+            if due_prop and due_prop['date']:
+                date_start = due_prop['date']['start']
+                date_end = due_prop['date'].get('end')
+                
+                logger.info(f"Date start: {date_start}")
+                logger.info(f"Date end: {date_end}")
+                
+                # Check if this is a date-only (no time) or datetime
+                # Date-only format: "2025-05-26"
+                # DateTime format: "2025-05-26T14:00:00.000-07:00" or similar
+                if 'T' in date_start:
+                    # This has a time component - parse as datetime
+                    start_time = ensure_timezone_aware(parser.parse(date_start))
+                    logger.info(f"Parsed as datetime: {start_time}")
+                    
+                    if date_end:
+                        end_time = ensure_timezone_aware(parser.parse(date_end))
+                        logger.info(f"Parsed end as datetime: {end_time}")
+                    else:
+                        # No end time specified - leave as None
+                        end_time = None
+                        logger.info("No end time specified - leaving as None")
+                else:
+                    # This is date-only (no time) - treat as all-day/no specific time
+                    logger.info("Date-only detected - not setting start/end times")
+                    start_time = None
+                    end_time = None
+            else:
+                logger.info("No Due date property - not setting start/end times")
             
             # Extract description
             description = ""
@@ -144,26 +207,45 @@ class NotionTaskSync:
     def send_notification(self, title: str, message: str, task: Task, notification_type: str):
         """Send desktop notification"""
         try:
-            # Create clickable message with Notion URL
-            full_message = f"{message}\n\nClick to open in Notion: {task.notion_url}"
+            # Temporarily disabled - just log what would be sent
+            logger.info(f"[NOTIFICATION DISABLED] Would send {notification_type} notification:")
+            logger.info(f"  Title: 🔔 {title}")
+            logger.info(f"  Message: {message}")
+            logger.info(f"  Task: {task.title}")
+            logger.info(f"  Notion URL: {task.notion_url}")
             
-            notification.notify(
-                title=f"🔔 {title}",
-                message=full_message,
-                timeout=10,  # Show for 10 seconds
-                app_name="Notion Task Sync"
-            )
-            
-            logger.info(f"Sent {notification_type} notification for task: {task.title}")
+            # TODO: Re-enable when notification system is working
+            # notification.notify(
+            #     title=f"🔔 {title}",
+            #     message=full_message,
+            #     timeout=10,
+            #     app_name="Notion Task Sync"
+            # )
             
         except Exception as e:
-            logger.error(f"Error sending notification: {e}")
+            logger.error(f"Error in notification logic: {e}")
     
     def check_notifications(self):
         """Check if any tasks need notifications"""
-        now = datetime.now()
+        now = get_current_time()
         
         for task in self.active_tasks.values():
+            # Handle tasks with start time only (no end time)
+            if task.start_time and not task.end_time:
+                # Check for start notification
+                if (not task.soft_stop_notified and 
+                    now >= task.start_time):
+                    
+                    self.send_notification(
+                        "Start Now",
+                        f"Time to begin: {task.title}\nStarted at {task.start_time.strftime('%H:%M')}",
+                        task,
+                        "start_now"
+                    )
+                    task.soft_stop_notified = True  # Reuse this flag to avoid repeat notifications
+                continue
+            
+            # Handle tasks with both start and end times
             if not task.end_time:
                 continue
                 
