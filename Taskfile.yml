@@ -89,7 +89,7 @@ tasks:
       - docker run --rm 
         --env-file .env
         {{.IMAGE_NAME}}:{{.TAG}} 
-        python test_connection.py
+        python -c "from notion_sync import test_connection; import sys; sys.exit(0 if test_connection() else 1)"
 
   dev:
     desc: Run container with code mounted for development

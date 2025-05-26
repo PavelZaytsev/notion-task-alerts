@@ -235,17 +235,72 @@ class NotionTaskSync:
                 logger.error(f"Error in main loop: {e}")
                 time.sleep(60)  # Wait a minute before retrying
 
+def test_connection():
+    """Test Notion API connection and database access"""
+    
+    notion_token = os.getenv('NOTION_TOKEN')
+    database_id = os.getenv('NOTION_DATABASE_ID')
+    
+    if not notion_token:
+        print("❌ NOTION_TOKEN not found in .env file")
+        return False
+        
+    if not database_id:
+        print("❌ NOTION_DATABASE_ID not found in .env file")
+        return False
+    
+    print("✅ Environment variables loaded")
+    
+    try:
+        # Initialize Notion client
+        notion = Client(auth=notion_token)
+        print("✅ Notion client initialized")
+        
+        # Test database access
+        response = notion.databases.retrieve(database_id=database_id)
+        print(f"✅ Database found: {response['title'][0]['plain_text']}")
+        
+        # Test querying database
+        query_response = notion.databases.query(database_id=database_id)
+        print(f"✅ Database query successful: {len(query_response['results'])} pages found")
+        
+        # Show database properties
+        print("\n📋 Database Properties:")
+        for prop_name, prop_data in response['properties'].items():
+            prop_type = prop_data['type']
+            print(f"  - {prop_name}: {prop_type}")
+        
+        print("\n🎉 Connection test passed!")
+        return True
+        
+    except Exception as e:
+        print(f"❌ Connection test failed: {e}")
+        print("\n🔧 Troubleshooting:")
+        print("1. Make sure your Notion integration token is correct")
+        print("2. Verify the database ID is correct")
+        print("3. Ensure the integration has access to the database")
+        return False
+
 def main():
     """Entry point"""
+    print("🧪 Testing Notion connection...\n")
+    
+    # Test connection first
+    if not test_connection():
+        print("\n❌ Connection test failed. Please fix the issues above before running.")
+        print("\nMake sure you have:")
+        print("1. Created a .env file with NOTION_TOKEN and NOTION_DATABASE_ID")
+        print("2. Set up your Notion integration and database properly")
+        return
+    
+    print("\n🚀 Starting Notion Task Sync...\n")
+    
     try:
         sync = NotionTaskSync()
         sync.run()
     except Exception as e:
         logger.error(f"Failed to start: {e}")
         print(f"Error: {e}")
-        print("\nMake sure you have:")
-        print("1. Created a .env file with NOTION_TOKEN and NOTION_DATABASE_ID")
-        print("2. Set up your Notion integration and database properly")
 
 if __name__ == "__main__":
     main() 
