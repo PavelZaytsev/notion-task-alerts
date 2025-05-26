@@ -68,7 +68,43 @@ NOTION_DATABASE_ID=your_database_id_here
 
 ## Usage
 
-### Run the notification system:
+### Option 1: Docker (Recommended)
+
+First, install [Task](https://taskfile.dev/installation/) if you don't have it:
+
+```bash
+# macOS
+brew install go-task
+
+# Or download from https://taskfile.dev/installation/
+```
+
+Then use the Taskfile commands:
+
+```bash
+# Initial setup
+task setup
+
+# Test connection
+task test
+
+# Run in foreground (development)
+task run
+
+# Run in background (production)
+task start
+
+# View logs
+task logs
+
+# Stop the service
+task stop
+
+# See all available commands
+task help
+```
+
+### Option 2: Direct Python
 
 ```bash
 python notion_sync.py

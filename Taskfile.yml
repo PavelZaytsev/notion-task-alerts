@@ -1,0 +1,152 @@
+version: '3'
+
+vars:
+  IMAGE_NAME: notion-sync
+  CONTAINER_NAME: notion-sync-app
+  TAG: latest
+
+tasks:
+  build:
+    desc: Build the Docker image
+    cmds:
+      - docker build -t {{.IMAGE_NAME}}:{{.TAG}} .
+    sources:
+      - Dockerfile
+      - requirements.txt
+      - "*.py"
+
+  run:
+    desc: Run the container in foreground (for development)
+    deps: [build]
+    cmds:
+      - |
+        if [ ! -f .env ]; then
+          echo "❌ .env file not found!"
+          echo "Please copy env.example to .env and configure your tokens"
+          exit 1
+        fi
+      - docker run --rm -it 
+        --name {{.CONTAINER_NAME}}
+        --env-file .env
+        -v /tmp/.X11-unix:/tmp/.X11-unix:rw
+        -v /var/run/dbus:/var/run/dbus:ro
+        -e DISPLAY=${DISPLAY:-:0}
+        {{.IMAGE_NAME}}:{{.TAG}}
+
+  start:
+    desc: Start the container in background (daemon mode)
+    deps: [build]
+    cmds:
+      - |
+        if [ ! -f .env ]; then
+          echo "❌ .env file not found!"
+          echo "Please copy env.example to .env and configure your tokens"
+          exit 1
+        fi
+      - docker run -d 
+        --name {{.CONTAINER_NAME}}
+        --restart unless-stopped
+        --env-file .env
+        -v /tmp/.X11-unix:/tmp/.X11-unix:rw
+        -v /var/run/dbus:/var/run/dbus:ro
+        -e DISPLAY=${DISPLAY:-:0}
+        {{.IMAGE_NAME}}:{{.TAG}}
+      - echo "✅ Container started in background"
+
+  stop:
+    desc: Stop the running container
+    cmds:
+      - docker stop {{.CONTAINER_NAME}} || true
+      - docker rm {{.CONTAINER_NAME}} || true
+      - echo "✅ Container stopped and removed"
+
+  restart:
+    desc: Restart the container
+    cmds:
+      - task: stop
+      - task: start
+
+  logs:
+    desc: Show container logs
+    cmds:
+      - docker logs -f {{.CONTAINER_NAME}}
+
+  shell:
+    desc: Open a shell in the running container
+    cmds:
+      - docker exec -it {{.CONTAINER_NAME}} /bin/bash
+
+  test:
+    desc: Run connection test in container
+    deps: [build]
+    cmds:
+      - |
+        if [ ! -f .env ]; then
+          echo "❌ .env file not found!"
+          echo "Please copy env.example to .env and configure your tokens"
+          exit 1
+        fi
+      - docker run --rm 
+        --env-file .env
+        {{.IMAGE_NAME}}:{{.TAG}} 
+        python test_connection.py
+
+  dev:
+    desc: Run container with code mounted for development
+    deps: [build]
+    cmds:
+      - |
+        if [ ! -f .env ]; then
+          echo "❌ .env file not found!"
+          echo "Please copy env.example to .env and configure your tokens"
+          exit 1
+        fi
+      - docker run --rm -it 
+        --name {{.CONTAINER_NAME}}-dev
+        --env-file .env
+        -v $(pwd):/app
+        -v /tmp/.X11-unix:/tmp/.X11-unix:rw
+        -v /var/run/dbus:/var/run/dbus:ro
+        -e DISPLAY=${DISPLAY:-:0}
+        {{.IMAGE_NAME}}:{{.TAG}}
+
+  clean:
+    desc: Clean up Docker images and containers
+    cmds:
+      - task: stop
+      - docker rmi {{.IMAGE_NAME}}:{{.TAG}} || true
+      - docker system prune -f
+      - echo "✅ Cleaned up Docker resources"
+
+  status:
+    desc: Show container status
+    cmds:
+      - echo "=== Container Status ==="
+      - docker ps -a --filter name={{.CONTAINER_NAME}}
+      - echo ""
+      - echo "=== Image Info ==="
+      - docker images {{.IMAGE_NAME}}
+
+  setup:
+    desc: Initial setup - copy env file and install task runner
+    cmds:
+      - |
+        if [ ! -f .env ]; then
+          cp env.example .env
+          echo "✅ Created .env file from template"
+          echo "📝 Please edit .env with your Notion credentials"
+        else
+          echo "✅ .env file already exists"
+        fi
+      - |
+        if ! command -v task &> /dev/null; then
+          echo "📦 Installing Task runner..."
+          echo "Please install Task: https://taskfile.dev/installation/"
+        else
+          echo "✅ Task runner is installed"
+        fi
+
+  help:
+    desc: Show available tasks
+    cmds:
+      - task --list 
