@@ -75,7 +75,8 @@ class NotionTaskSync:
             start_of_day = datetime.combine(today, datetime.min.time(), timezone.utc)
             end_of_day = datetime.combine(today, datetime.max.time(), timezone.utc)
             
-            # Query Notion database for today's tasks
+            # Query Notion database for today's tasks with Status = "To Do"
+            # Note: We filter by date range and status, then filter out date-only tasks in parsing
             response = self.notion.databases.query(
                 database_id=self.database_id,
                 filter={
@@ -90,6 +91,12 @@ class NotionTaskSync:
                             "property": "Due", 
                             "date": {
                                 "on_or_before": end_of_day.isoformat()
+                            }
+                        },
+                        {
+                            "property": "Status",
+                            "status": {
+                                "equals": "To Do"
                             }
                         }
                     ]
@@ -116,6 +123,9 @@ class NotionTaskSync:
                 logger.info(f"  - Notion URL: {task.notion_url}")
                 logger.info("  ---")
             
+            # Task parsing complete - continue to notification system
+            logger.info(f"✅ Task parsing complete - found {len(tasks)} tasks with times")
+            
             return tasks
             
         except Exception as e:
@@ -141,6 +151,13 @@ class NotionTaskSync:
                 logger.info(f"Raw Due property: {due_prop}")
             else:
                 logger.info("No Due property found")
+                
+            # Debug: Show Status property
+            status_prop = properties.get('Status')
+            if status_prop:
+                logger.info(f"Status property: {status_prop}")
+            else:
+                logger.info("No Status property found")
                 
             logger.info("=== END TASK PARSING ===\n")
             
@@ -181,12 +198,12 @@ class NotionTaskSync:
                         end_time = None
                         logger.info("No end time specified - leaving as None")
                 else:
-                    # This is date-only (no time) - treat as all-day/no specific time
-                    logger.info("Date-only detected - not setting start/end times")
-                    start_time = None
-                    end_time = None
+                    # This is date-only (no time) - skip this task entirely
+                    logger.info("Date-only detected - skipping task (no notifications needed)")
+                    return None
             else:
-                logger.info("No Due date property - not setting start/end times")
+                logger.info("No Due date property - skipping task (no notifications needed)")
+                return None
             
             # Extract description
             description = ""
@@ -223,6 +240,11 @@ class NotionTaskSync:
                     logger.info("Soft Stop Mins property exists but value is None/empty")
             else:
                 logger.info("No 'Soft Stop Mins' property found")
+            
+            # Only create task if it has a start time (datetime tasks only)
+            if start_time is None:
+                logger.info("No start time - skipping task (no notifications needed)")
+                return None
             
             # Create Notion URL
             notion_url = f"https://notion.so/{page['id'].replace('-', '')}"
