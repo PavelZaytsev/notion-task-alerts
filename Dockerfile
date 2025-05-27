@@ -31,4 +31,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python -c "import sys; sys.exit(0)"
 
 # Default command
-CMD ["python", "notion_sync.py"] 
+CMD ["python", "notion_task_alerts.py"] 

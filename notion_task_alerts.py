@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """
-Notion Task Notification System
+Notion Task Alerts
 
-Polls a Notion database for tasks and fires desktop notifications
-at the right times to help with ADHD task management.
+Connects your Notion database to Discord notifications.
+Get real-time alerts for tasks with smart timing and rich formatting.
+Perfect for anyone who wants to bridge Notion planning with actionable notifications.
 """
 
 import os
@@ -21,12 +22,31 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
+# Configure logging with local timezone
+class LocalTimeFormatter(logging.Formatter):
+    def formatTime(self, record, datefmt=None):
+        # Convert to local timezone
+        dt = datetime.fromtimestamp(record.created)
+        if datefmt:
+            return dt.strftime(datefmt)
+        else:
+            return dt.strftime('%Y-%m-%d %H:%M:%S')
+
+# Set up logging with local time formatter
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+# Create console handler with local time formatter
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.INFO)
+formatter = LocalTimeFormatter('%(asctime)s - %(levelname)s - %(message)s')
+console_handler.setFormatter(formatter)
+
+# Add handler to logger
+logger.addHandler(console_handler)
+
+# Prevent duplicate logs
+logger.propagate = False
 
 def ensure_timezone_aware(dt: datetime) -> datetime:
     """Ensure datetime is timezone-aware, defaulting to local timezone if naive"""
@@ -311,7 +331,7 @@ class NotionTaskSync:
                     }
                 ],
                 "footer": {
-                    "text": f"ADHD Task Alert • {notification_type.replace('_', ' ').title()}"
+                    "text": f"Notion Task Alert • {notification_type.replace('_', ' ').title()}"
                 }
             }
             
@@ -347,9 +367,9 @@ class NotionTaskSync:
             
             # Create Discord webhook payload
             payload = {
-                "content": f"@here {emoji} **ADHD Task Alert**",  # @here for attention
+                "content": f"@here {emoji} **Task Alert**",  # @here for attention
                 "embeds": [embed],
-                "username": "Notion Task Sync",
+                "username": "Notion Task Alerts",
                 "avatar_url": "https://www.notion.so/images/favicon.ico"
             }
             
