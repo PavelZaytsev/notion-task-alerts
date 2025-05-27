@@ -14,7 +14,7 @@ from typing import List, Dict, Optional
 from dataclasses import dataclass
 
 from notion_client import Client
-from plyer import notification
+import requests
 from dateutil import parser
 from dotenv import load_dotenv
 
@@ -265,28 +265,116 @@ class NotionTaskSync:
             return None
     
     def send_notification(self, title: str, message: str, task: Task, notification_type: str):
-        """Send desktop notification"""
+        """Send Discord notification"""
         try:
-            # Create full message with Notion link
-            full_message = f"{message}\n\n📝 Open in Notion: {task.notion_url}"
+            webhook_url = os.getenv('DISCORD_WEBHOOK_URL')
+            if not webhook_url:
+                logger.error("❌ DISCORD_WEBHOOK_URL not found in environment")
+                logger.error("💡 Add your Discord webhook URL to .env file")
+                return False
             
-            logger.info(f"🔔 Sending {notification_type} notification:")
+            # Color coding for different alert types (ADHD-friendly)
+            color_map = {
+                "prepare_alert": 0xFFA500,    # Orange - Get ready
+                "start_alert": 0x00FF00,      # Green - Go time
+                "soft_stop_alert": 0xFFFF00,  # Yellow - Wind down
+                "end_alert": 0xFF0000         # Red - Stop now
+            }
+            
+            # Emoji mapping for visual distinction
+            emoji_map = {
+                "prepare_alert": "🧠",
+                "start_alert": "🎯", 
+                "soft_stop_alert": "🔄",
+                "end_alert": "🛑"
+            }
+            
+            color = color_map.get(notification_type, 0x0099FF)
+            emoji = emoji_map.get(notification_type, "🔔")
+            
+            # Create rich embed for Discord
+            embed = {
+                "title": f"{emoji} {title}",
+                "description": message,
+                "color": color,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "fields": [
+                    {
+                        "name": "📋 Task",
+                        "value": task.title,
+                        "inline": True
+                    },
+                    {
+                        "name": "🔗 Open in Notion",
+                        "value": f"[Click here to open task]({task.notion_url})",
+                        "inline": True
+                    }
+                ],
+                "footer": {
+                    "text": f"ADHD Task Alert • {notification_type.replace('_', ' ').title()}"
+                }
+            }
+            
+            # Add timing information if available
+            if task.start_time:
+                embed["fields"].append({
+                    "name": "⏰ Start Time",
+                    "value": task.start_time.strftime("%H:%M"),
+                    "inline": True
+                })
+            
+            if task.end_time:
+                embed["fields"].append({
+                    "name": "⏱️ End Time", 
+                    "value": task.end_time.strftime("%H:%M"),
+                    "inline": True
+                })
+            
+            # Add preparation info for ADHD context
+            if notification_type == "prepare_alert" and task.prepare_minutes:
+                embed["fields"].append({
+                    "name": "🧠 Cognitive Transition",
+                    "value": f"Start mentally preparing now\n{task.prepare_minutes} minutes until task begins",
+                    "inline": False
+                })
+            
+            if notification_type == "soft_stop_alert" and task.soft_stop_minutes:
+                embed["fields"].append({
+                    "name": "🔄 Wind Down Phase",
+                    "value": f"Begin wrapping up your current focus\n{task.soft_stop_minutes} minutes until task ends",
+                    "inline": False
+                })
+            
+            # Create Discord webhook payload
+            payload = {
+                "content": f"@here {emoji} **ADHD Task Alert**",  # @here for attention
+                "embeds": [embed],
+                "username": "Notion Task Sync",
+                "avatar_url": "https://www.notion.so/images/favicon.ico"
+            }
+            
+            logger.info(f"🔔 Sending {notification_type} to Discord:")
             logger.info(f"  Title: {title}")
-            logger.info(f"  Message: {message}")
             logger.info(f"  Task: {task.title}")
+            logger.info(f"  Color: #{color:06x}")
             
-            # Send desktop notification
-            notification.notify(
-                title=f"🔔 {title}",
-                message=full_message,
-                timeout=10,
-                app_name="Notion Task Sync"
+            # Send to Discord
+            response = requests.post(
+                webhook_url,
+                json=payload,
+                timeout=10
             )
             
-            logger.info(f"✅ {notification_type} notification sent successfully")
-            
+            if response.status_code == 204:  # Discord webhook success
+                logger.info(f"✅ {notification_type} sent to Discord successfully")
+                return True
+            else:
+                logger.error(f"❌ Discord returned {response.status_code}: {response.text}")
+                return False
+                
         except Exception as e:
-            logger.error(f"Error sending notification: {e}")
+            logger.error(f"❌ Error sending Discord notification: {e}")
+            return False
     
     def check_notifications(self):
         """Check if any tasks need notifications"""
