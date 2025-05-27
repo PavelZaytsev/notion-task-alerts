@@ -267,23 +267,26 @@ class NotionTaskSync:
     def send_notification(self, title: str, message: str, task: Task, notification_type: str):
         """Send desktop notification"""
         try:
-            # Temporarily disabled - just log what would be sent
-            logger.info(f"[NOTIFICATION DISABLED] Would send {notification_type} notification:")
-            logger.info(f"  Title: 🔔 {title}")
+            # Create full message with Notion link
+            full_message = f"{message}\n\n📝 Open in Notion: {task.notion_url}"
+            
+            logger.info(f"🔔 Sending {notification_type} notification:")
+            logger.info(f"  Title: {title}")
             logger.info(f"  Message: {message}")
             logger.info(f"  Task: {task.title}")
-            logger.info(f"  Notion URL: {task.notion_url}")
             
-            # TODO: Re-enable when notification system is working
-            # notification.notify(
-            #     title=f"🔔 {title}",
-            #     message=full_message,
-            #     timeout=10,
-            #     app_name="Notion Task Sync"
-            # )
+            # Send desktop notification
+            notification.notify(
+                title=f"🔔 {title}",
+                message=full_message,
+                timeout=10,
+                app_name="Notion Task Sync"
+            )
+            
+            logger.info(f"✅ {notification_type} notification sent successfully")
             
         except Exception as e:
-            logger.error(f"Error in notification logic: {e}")
+            logger.error(f"Error sending notification: {e}")
     
     def check_notifications(self):
         """Check if any tasks need notifications"""
@@ -338,7 +341,10 @@ class NotionTaskSync:
     
     def update_active_tasks(self):
         """Update the list of active tasks"""
+        logger.info("🔄 Updating active tasks...")
         tasks = self.fetch_tasks()
+        
+        logger.info(f"📝 Processing {len(tasks)} tasks for active task list...")
         
         # Update existing tasks and add new ones
         for task in tasks:
@@ -349,29 +355,57 @@ class NotionTaskSync:
                 task.start_notified = existing_task.start_notified
                 task.soft_stop_notified = existing_task.soft_stop_notified
                 task.end_notified = existing_task.end_notified
+                logger.info(f"♻️  Updated existing task: {task.title}")
+            else:
+                logger.info(f"➕ Added new task: {task.title}")
             
             self.active_tasks[task.id] = task
         
         # Remove tasks that are no longer in today's list
         current_task_ids = {task.id for task in tasks}
+        removed_tasks = [
+            task.title for task_id, task in self.active_tasks.items()
+            if task_id not in current_task_ids
+        ]
+        
         self.active_tasks = {
             task_id: task for task_id, task in self.active_tasks.items()
             if task_id in current_task_ids
         }
+        
+        if removed_tasks:
+            logger.info(f"🗑️  Removed {len(removed_tasks)} tasks: {', '.join(removed_tasks)}")
+        
+        logger.info(f"✅ Active tasks updated: {len(self.active_tasks)} total active tasks")
     
-    def run(self):
+    def run(self, debug_mode=False):
         """Main loop - poll database and check for notifications"""
         logger.info("Starting Notion Task Sync...")
         
+        iteration = 0
         while True:
             try:
+                iteration += 1
+                logger.info(f"🔄 Starting iteration {iteration}")
+                
                 # Update tasks every 5 minutes
                 self.update_active_tasks()
                 
+                logger.info("🔔 Checking for notifications...")
                 # Check for notifications every 30 seconds
-                for _ in range(10):  # 10 * 30 seconds = 5 minutes
+                for i in range(10):  # 10 * 30 seconds = 5 minutes
+                    logger.info(f"📅 Notification check {i+1}/10")
                     self.check_notifications()
-                    time.sleep(30)
+                    
+                    if debug_mode:
+                        logger.info("🧪 Debug mode: Exiting after first notification check")
+                        return
+                    
+                    if i < 9:  # Don't sleep after the last check
+                        logger.info("⏰ Sleeping 30 seconds...")
+                        time.sleep(30)
+                
+                logger.info(f"✅ Completed iteration {iteration}")
                     
             except KeyboardInterrupt:
                 logger.info("Shutting down...")
@@ -442,7 +476,8 @@ def main():
     
     try:
         sync = NotionTaskSync()
-        sync.run()
+        # Run in production mode - continuous monitoring
+        sync.run(debug_mode=False)
     except Exception as e:
         logger.error(f"Failed to start: {e}")
         print(f"Error: {e}")
