@@ -1,6 +1,6 @@
-# Notion Task Sync
+# Notion Task Alerts
 
-An ADHD-friendly task notification system that bridges Notion's excellent task management with reliable desktop notifications.
+A task notification system that bridges Notion's excellent task management with Discord notifications.
 
 ## What it does
 
