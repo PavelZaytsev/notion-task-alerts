@@ -15,27 +15,9 @@ tasks:
       - requirements.txt
       - "*.py"
 
-  run:
-    desc: Run the container in foreground (for development)
-    deps: [build]
-    cmds:
-      - |
-        if [ ! -f .env ]; then
-          echo "❌ .env file not found!"
-          echo "Please copy env.example to .env and configure your tokens"
-          exit 1
-        fi
-      - docker run --rm -it 
-        --name {{.CONTAINER_NAME}}
-        --env-file .env
-        -v /tmp/.X11-unix:/tmp/.X11-unix:rw
-        -v /var/run/dbus:/var/run/dbus:ro
-        -e DISPLAY=${DISPLAY:-:0}
-        {{.IMAGE_NAME}}:{{.TAG}}
-
   start:
     desc: Start the container in background (daemon mode)
-    deps: [build]
+    deps: [stop, build]
     cmds:
       - |
         if [ ! -f .env ]; then
@@ -47,9 +29,6 @@ tasks:
         --name {{.CONTAINER_NAME}}
         --restart unless-stopped
         --env-file .env
-        -v /tmp/.X11-unix:/tmp/.X11-unix:rw
-        -v /var/run/dbus:/var/run/dbus:ro
-        -e DISPLAY=${DISPLAY:-:0}
         {{.IMAGE_NAME}}:{{.TAG}}
       - echo "✅ Container started in background"
 
@@ -107,9 +86,6 @@ tasks:
         --name {{.CONTAINER_NAME}}-dev
         --env-file .env
         -v $(pwd):/app
-        -v /tmp/.X11-unix:/tmp/.X11-unix:rw
-        -v /var/run/dbus:/var/run/dbus:ro
-        -e DISPLAY=${DISPLAY:-:0}
         {{.IMAGE_NAME}}:{{.TAG}}
 
   clean:
@@ -130,23 +106,10 @@ tasks:
       - docker images {{.IMAGE_NAME}}
 
   setup:
-    desc: Initial setup - copy env file and install task runner
+    desc: Initial setup
     cmds:
-      - |
-        if [ ! -f .env ]; then
-          cp env.example .env
-          echo "✅ Created .env file from template"
-          echo "📝 Please edit .env with your Notion credentials"
-        else
-          echo "✅ .env file already exists"
-        fi
-      - |
-        if ! command -v task &> /dev/null; then
-          echo "📦 Installing Task runner..."
-          echo "Please install Task: https://taskfile.dev/installation/"
-        else
-          echo "✅ Task runner is installed"
-        fi
+      - chmod +x setup.sh
+      - ./setup.sh
 
   help:
     desc: Show available tasks

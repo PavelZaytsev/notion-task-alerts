@@ -329,10 +329,7 @@ class NotionTaskSync:
                         "value": f"[Click here to open task]({task.notion_url})",
                         "inline": True
                     }
-                ],
-                "footer": {
-                    "text": f"Notion Task Alert • {notification_type.replace('_', ' ').title()}"
-                }
+                ]
             }
             
             # Add timing information if available
@@ -348,21 +345,6 @@ class NotionTaskSync:
                     "name": "⏱️ End Time", 
                     "value": task.end_time.strftime("%H:%M"),
                     "inline": True
-                })
-            
-            # Add preparation info for ADHD context
-            if notification_type == "prepare_alert" and task.prepare_minutes:
-                embed["fields"].append({
-                    "name": "🧠 Cognitive Transition",
-                    "value": f"Start mentally preparing now\n{task.prepare_minutes} minutes until task begins",
-                    "inline": False
-                })
-            
-            if notification_type == "soft_stop_alert" and task.soft_stop_minutes:
-                embed["fields"].append({
-                    "name": "🔄 Wind Down Phase",
-                    "value": f"Begin wrapping up your current focus\n{task.soft_stop_minutes} minutes until task ends",
-                    "inline": False
                 })
             
             # Create Discord webhook payload
