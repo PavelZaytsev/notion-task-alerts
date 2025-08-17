@@ -6,10 +6,9 @@ A powerful notification system that bridges Notion's excellent task management w
 
 - **Polls your Notion database** every 5 minutes for today's tasks
 - **Checks for notifications** every 30 seconds for precise timing
-- **Fires 4-tier alert system** with ADHD-optimized cognitive transitions:
+- **Fires 3-tier alert system** with ADHD-optimized cognitive transitions:
   - 🧠 **Prepare Alert**: X minutes before start (customizable per task)
   - 🎯 **Start Alert**: At task start time
-  - 🔄 **Soft Stop Alert**: X minutes before end (customizable per task) 
   - 🛑 **End Alert**: At task end time
 - **Rich Discord notifications** with color coding, emojis, and clickable Notion links
 - **Cross-platform delivery** - works on desktop and mobile Discord
@@ -49,22 +48,22 @@ Your database needs these specific properties:
 
 #### Custom Properties (Create these):
 - **Prepare Mins** (Number property) - Minutes before start to send prepare alert
-- **Soft Stop Mins** (Number property) - Minutes before end to send wind-down alert
 - **Description** (Rich text property) - Optional task details
 
 #### Example Database Structure:
 ```
-| Name          | Due                     | Status | Prepare Mins | Soft Stop Mins | Description        |
-|---------------|-------------------------|--------|--------------|----------------|--------------------|
-| Morning Gym   | Dec 15, 2024 9:00 AM   | To Do  | 5            | 10             | Cardio + weights   |
-| Code Review   | Dec 15, 2024 2:00 PM   | To Do  | 10           | 5              | Review PR #123     |
-| Team Meeting  | Dec 15, 2024 3:00-4:00 | To Do  | 15           | 5              | Weekly standup     |
+| Name          | Due                     | Status | Prepare Mins | Description        |
+|---------------|-------------------------|--------|--------------|--------------------|
+
+| Morning Gym   | Dec 15, 2024 9:00 AM   | To Do  | 5            | Cardio + weights   |
+| Code Review   | Dec 15, 2024 2:00 PM   | To Do  | 10           | Review PR #123     |
+| Team Meeting  | Dec 15, 2024 3:00-4:00 | To Do  | 15           | Weekly standup     |
 ```
 
 #### Important Notes:
 - **Due property must have TIME** (e.g., "Dec 15, 2024 9:00 AM"), not just date
 - **Date-only tasks are ignored** (no notifications sent)
-- **Prepare Mins and Soft Stop Mins** should be pinned properties for easy access
+- **Prepare Mins** should be pinned properties for easy access
 - **Status must be "To Do"** for tasks to be processed
 
 ### 4. Share Database with Integration
@@ -194,7 +193,7 @@ task logs    # Monitor logs
 3. **Smart filtering**: Only processes tasks with datetime (ignores date-only)
 4. **State preservation**: Remembers which alerts have been sent
 
-### 4-Tier Alert System
+### 3-Tier Alert System
 
 #### 🧠 Prepare Alert (Orange)
 - **When**: X minutes before start time (customizable per task)
@@ -207,12 +206,6 @@ task logs    # Monitor logs
 - **Message**: "Lock in and begin the task"
 - **Purpose**: Clear action trigger
 - **Example**: Exactly at 2:00 PM
-
-#### 🔄 Soft Stop Alert (Yellow)
-- **When**: X minutes before end time (customizable per task)
-- **Message**: "Start winding down your CPUs"
-- **Purpose**: Gradual task conclusion preparation
-- **Example**: 5 minutes before 3:00 PM end time
 
 #### 🛑 End Alert (Red)
 - **When**: At exact end time
